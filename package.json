@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:pixel": "node --test pixel-world.test.mjs",
+    "test:service": "python3 -m unittest test_service test_pixel",
+    "preview:build": "node tools/build-preview.mjs",
+    "preview:test": "node tools/test-preview.mjs",
+    "test:meet-ui": "node tools/test-meet-ui.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.5",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "happy-dom": "20.14.5"
+  }
+}

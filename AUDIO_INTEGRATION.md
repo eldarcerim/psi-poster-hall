@@ -1,0 +1,24 @@
+# Audio po štandu — pripremljeno, NEAKTIVNO
+
+## Šta je u kodu
+
+- `audio/booth-audio.js`: adapter za službeni LiveKit Room/RoomEvent na zasebnom odobrenom media porijeklu. Ne radi u opaque PSI okviru. Prvo disconnect(true) stare sobe, tek onda spajanje nove; generation/cancellation sprečavaju kasno spajanje napuštenog štanda. Join počinje listen-only. Mikrofon se objavljuje samo uz izričitu radnju i grant. Permission/network greške, reconnect i leave su posebna stanja. Nema automatskog snimanja.
+- `audio/authority.py`: membership čita stvarni server state (event, session ID, booth, role, expiry, presence, open flag), ne vjeruje klijentskim nazivima soba/ulogama. Opaque identity i `psi-{eventID}-booth-{number}` room, bez imena osobe. Presenter objavljuje samo u dodijeljenom štandu; organizer može objavljivati; participant je listen-only.
+- mint_livekit_token koristi SDK AccessToken/VideoGrants: 30s initial-connect TTL, exact room, canSubscribe, canPublish samo gdje ovlast dozvoljava, canPublishSources=[microphone], canPublishData=false. Nema roomAdmin/roomRecord/egress granta.
+- enforce_booth_lease eksplicitno uklanja participant iz stare LiveKit sobe kad trenutna server ovlast ne vrijedi; private authority outage je fail-closed. Pozvati odmah na booth switch/leave/session close, uz provjeru svake 2s kao rezervu. JWT expiry SAM NE prekida već spojenog učesnika.
+
+Official contracts checked: [token grants/lifecycle](https://docs.livekit.io/frontends/reference/tokens-grants/), [Room connection](https://docs.livekit.io/intro/basics/connect/). Token expiry ograničava prvo spajanje, ne već spojenu sesiju. Udaljeno uklanjanje i odspajanje su obavezni, ne opcionalni timeout workaround.
+
+Testirano offline: stvarni livekit-api 1.2.1 generisao je JWT samo s fiktivnim ključevima; grant payload provjeren bez mrežnog poziva. Adapter lifecycle testiran s testnim Room-om; nije proglašen end-to-end audio testom. Predviđena web dependency livekit-client 2.22.3 (npm registry provjeren), tek na odobrenom media originu. Python SDK je instaliran samo u chat scratch za testove, nije dependency aktivnog PSI servisa.
+
+## Tačan sljedeći korak, prije aktivacije
+
+1. Vlasnik odabire i odobrava **konkretno** HTTPS media porijeklo, LiveKit server/model hostinga i njegov trošak. Nisu napravljeni računi, sobe, javni servisi, plaćanja ili cloud konfiguracija.
+2. Pregledati poseban private authority ↔ media gateway trust: gateway ne smije dobiti owner token niti proizvoljan read/write pristup PSI bazi. membership radi na privatnom PSI serveru. Pregledati dedicated server-to-server autentikaciju s najmanjim opsegom; ne omogućiti public PSI service.
+3. Implementirati i pregledati one-use audio-ticket issuance/redemption u privatnom PSI authority-ju (vezan session ID, event, booth, media origin, nonce, 30s, samo hash sačuvan). Browser predaje audio ticket u POST tijelu/memorijskom handshaku, nikad URL/store/log. PSI session bearer NE šalje se media provajderu. Media gateway po redeem dobije samo server lease i mint funkciju; nikada ne prima client-defined room/role.
+4. Otvoriti media page kao top-level dokument na tom porijeklu, ne nestati u PSI sandbox. Sadašnji frame nema autorizovan takav host launch/handshake; pregledati taj put prije aktivacije, bez pop-up/parent-bridge trikova ili slabljenja sandboxa. Ako platforma ne podrži reviewed launch, media origin se otvara zasebno i ticket unosi tamo privatno. Kredencijali idu kroz secure-input karticu, ne chat.
+5. Na media page vezati fetchGrant na pregledani same-origin POST redemption. allowedServer/expectedRoom dolaze iz reviewed deploymenta, ne slobodnog korisničkog URL-a. attachAudio radi track.attach() i na detach uklanja audio elemente. Mikrofon ostaje off dok korisnik ne pritisne kontrolu; dozvola je samo mikrofon, ne kamera, bez snimanja/egressa.
+6. Gateway mora održavati provjerene booth leases i **odmah** revokovati/RemoveParticipant pri kretanju/leave/close. Switch se potvrđuje tek nakon removal stare sobe. Backup 2s lease poll nije obećanje trenutne revocation tokom mrežnog prekida; to je ograničenje koje treba mjeriti. Server-side authority hooks i authenticated removal deployment još nisu spojeni u live PSI servis.
+7. Prije uključivanja: dva klijenta razmjenjuju stvarni audio u štandu A; treći u B ne sluša/objavljuje A; testirati stari JWT, prisilni direct join, switch, rub zone, late promises, permission denial, mobile interrupt/reconnect, authority outage i server removal. Dodati kratku booth-boundary stabilizaciju za audio bez zadržavanja zvuka stare sobe: izlazak odspaja odmah, ulazak u novu tek poslije stabilnog potvrđenog booth lease-a.
+
+Tek nakon zasebnog odobrenja, deploymenta i ovih testova promijeniti UI iz „Audio uživo nije povezan“. Ova instalacija nema aktivni mikrofon, audio ticket endpoint, server-to-server credential ili media konekciju. Podizanje ruke trenutno je signal/pisano pitanje, ne audio publish dozvola.

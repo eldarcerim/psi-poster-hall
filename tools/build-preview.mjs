@@ -1,0 +1,10 @@
+import {build} from 'esbuild';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+const entry=fileURLToPath(new URL('../PixelPreview.jsx',import.meta.url));
+const output=await build({entryPoints:[entry],bundle:true,write:false,minify:true,format:'iife',platform:'browser',define:{'process.env.NODE_ENV':'"production"'}});
+const code=output.outputFiles[0].text.replaceAll('</script','<\\/script');
+const directory=new URL('../../preview/',import.meta.url);
+await mkdir(directory,{recursive:true});
+await writeFile(new URL('PSI-pixel-preview.html',directory),`<!doctype html><html lang="bs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PSI · Pixel pregled</title><style>html,body{margin:0;background:#252e40}body{font-family:system-ui,sans-serif}</style></head><body><div id="psi-pixel-preview"></div><script>${code}</script></body></html>`);
+console.log('Standalone preview built without external resources.');
